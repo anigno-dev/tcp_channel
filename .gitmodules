@@ -1,0 +1,3 @@
+[submodule "logging_lib"]
+	path = logging_lib
+	url = git@github.com:anigno-dev/logging_lib.git

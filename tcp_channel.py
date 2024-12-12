@@ -3,7 +3,7 @@ import socket
 import threading
 import time
 
-from simple_logger import SimpleLogger
+from logging_lib.simple_logging.simple_logger import SimpleLogger
 
 class TcpChannel:
     BYTES_FOR_DATA_SIZE = 4  # 2^(4*8)-1=4GB-1
