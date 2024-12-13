@@ -1,74 +1,167 @@
 # TCP Channel
 
-## This Python script defines a TCP-based communication framework using a custom TcpChannel class. It enables sending and receiving messages between clients and servers over TCP sockets while supporting a callback mechanism for handling incoming data. Here's a breakdown:
+## This Python class TcpChannel implements a TCP communication channel with multithreading, enabling the creation of a TCP server or client that can send and receive data asynchronously. Below is a breakdown of the class and its components:
 
-Key Components
-1. TcpChannel Class
-This class handles the core TCP socket operations for sending, receiving, and listening for connections.
+## Class Overview
+TcpChannel is a class designed to:
 
-Attributes:
+Start a server to listen for incoming TCP connections.
+Connect to a remote server as a client.
+Send and receive data using TCP sockets.
+Use callbacks for handling received data or connection errors.
+Log operations for easier debugging and tracking.
 
-BYTES_FOR_DATA_SIZE: Defines the size of the message length header (4 bytes, allowing messages up to ~4GB).
-NEXT_READ_BYTES_LENGTH: Controls the buffer size for each read operation.
-Sockets (listening_socket, client_socket) and threading objects for listening and receiving data asynchronously.
-on_data_received_handler: A callback function invoked when data is received.
-Methods:
+## Key Attributes
+Constants:
 
-start_listening(): Starts a thread to listen for incoming client connections.
-_start_receiving(): Begins a thread to handle incoming data.
-register_data_received_callback(callback): Registers a callback for processing received data.
-close(): Gracefully shuts down sockets and terminates threads.
-connect(host, port): Establishes a connection to a remote server.
-send(data): Sends data, prepending its length as a 4-byte header.
-listening_thread_handler(): Thread function for accepting client connections.
-data_receiving_thread_handler(): Thread function for reading data from the client.
-2. Logging with SimpleLogger
-Utilizes the SimpleLogger and custom SeverityPaddingFormatter (from the earlier script) for formatted log output.
-Logs activity at various levels (e.g., INFO, DEBUG, ERROR) to track state and errors.
-3. Test Functions
-The main section includes two tests:
+BYTES_FOR_DATA_SIZE: Specifies the number of bytes used to encode the size of the data being sent.
+NEXT_READ_BYTES_LENGTH: Defines the buffer size for receiving data.
+Constructor (__init__):
 
-connect_send_receive()
-Purpose: Simulates two channels (ch1, ch2) communicating with each other.
-Steps:
-Initializes two TcpChannel instances (ch1, ch2) on separate ports.
-Registers a callback (on_data_received) to log received data and append results to a shared list.
-ch1 connects to ch2 and sends large and small data payloads.
-Verifies the data received by ch2 matches the expected payloads.
-Closes both channels.
-connection_error()
-Purpose: Simulates a failed connection attempt to test error handling.
-Steps:
-ch1 starts listening.
-Attempts to connect to a non-existent server on another port (9021).
-Captures and logs the expected ConnectionRefusedError.
-How It Works
-Listening for Connections:
+Sets up logger, host, port, threading variables, and socket placeholders.
+Initializes callbacks for handling received data and errors.
+Generates a unique channel_name for logs.
 
-A server (ch1) starts listening on a specific port. When a client (ch2) connects, the server logs the connection and starts receiving data in a separate thread.
-Sending and Receiving Data:
+## Methods
 
-Data is sent with a 4-byte length prefix, allowing the receiver to read the exact payload size.
-Callback Mechanism:
+1. start_listening()
+Starts a listening thread that accepts incoming connections.
+Used when the channel acts as a server.
+2. _start_receiving()
+Starts a thread for receiving data from the connected client.
+Automatically called when a connection is established.
+3. register_data_received_callback()
+Registers a callback for handling received data.
+Callback signature: on_data_received_handler(data: bytes).
+4. register_connection_error_callback()
+Registers a callback for handling connection errors.
+Callback signature: on_connection_error(error: Exception).
+5. close()
+Closes sockets and stops the listening and receiving threads.
+6. connect()
+Connects to a remote server as a client.
+Starts the receiving thread after connecting.
+7. send()
+Sends data to the connected peer.
+Prepends the data with its length (in bytes) for easier framing during reception.
+8. listening_thread_handler()
+Handles the listening thread:
+Binds the socket to a host and port.
+Listens for incoming connections.
+Accepts one client connection at a time.
+9. data_receiving_thread_handler()
+Handles the data receiving thread:
+Reads the length of the incoming message.
+Reads the message in chunks and reassembles it.
+Passes the received data to the registered callback.
+Error Handling
+WinError 10038: Specific to Windows, occurs when a socket operation is attempted on a closed socket.
+Handles OSError and general exceptions during listening and data reception.
+Calls on_connection_error callback if an error occurs.
+Logging
+Logs every significant action or error to help monitor the state of the channel.
+Includes details like connection status, received data size, and errors.
 
-A callback function (on_data_received) processes data when received. It is registered using register_data_received_callback.
+## Advantages
+Multithreading: Handles listening and receiving concurrently.
+Callbacks: Decouples logic for handling data and errors.
+Framing: Sends and receives data with size headers for better handling.
+
+
+# example.py
+This script demonstrates various functionalities of the TcpChannel class through three test scenarios: sending/receiving data, handling connection errors, and managing connections/disconnections. Below is an explanation of its components and functionality:
+
+Imports
+logging: For logging events and debug information.
+time: To introduce delays for synchronization.
+simple_logging.simple_logger: A custom logger setup utility.
+TcpChannel: The TcpChannel class for TCP communication.
+Logger Setup
+SimpleLogger("my_logger", logging.DEBUG):
+Configures a logger named my_logger with a debug level.
+my_logger = logging.getLogger("my_logger"):
+Retrieves the logger instance for use throughout the script.
+Global Variables
+results: A list used to store data received during communication tests.
+Test Scenarios
+1. connect_send_receive()
+This function tests sending and receiving data between two TcpChannel instances.
+
+Callbacks:
+
+on_data_received(data: bytes):
+Appends the size and first two bytes of the received data to the results list.
+Logs the size of the received data.
+Channels Setup:
+
+Two TcpChannel instances (ch1 and ch2) are created, bound to ports 9020 and 9021, respectively.
+Both channels register the on_data_received callback.
+ch1 connects to ch2.
+Sending Data:
+
+ch1 sends:
+A large message (1 GB of repeated data).
+A small message (b"123456").
+ch2 sends b"abcdefgh".
+Wait and Verify:
+
+The script waits until six results are collected in results.
+The channels are closed, and the received data is validated using assertions:
+The first received message is 8 bytes with b"ab".
+The second received message is the large data size and starts with b"12".
+The third received message is 6 bytes with b"12".
+2. connection_error()
+This function tests handling of a connection error.
+
+Setup:
+
+ch1 listens on port 9020.
+An attempt is made to connect ch1 to a non-existent server on port 9021.
 Error Handling:
 
-Includes robust error handling for socket operations (OSError, Exception) to prevent crashes from invalid operations or closed sockets.
-Important Notes
-Concurrency:
+A ConnectionRefusedError is expected because no server is listening on port 9021.
+The error is logged using the logger.
+Teardown:
 
-Both listening and data-receiving operations run in separate threads, enabling non-blocking behavior.
-Data Validation:
+ch1 is closed.
+3. connect_disconnect()
+This function tests behavior when a peer disconnects during communication.
 
-The connect_send_receive() test ensures the data is correctly received and verifies message integrity using assertions.
-Scalability:
+Callbacks:
 
-While designed for one-to-one communication, the structure can be extended for multiple clients or a more complex architecture.
-Example Output
-The logs generated by this script include details such as:
+on_connection_error(ex: Exception):
+Logs connection errors as they occur.
+Channels Setup:
 
-Server and client connections.
-Sent and received data sizes.
-Errors like connection refusal or socket closure.
-This framework is useful for developing lightweight TCP-based communication between components in a distributed system.
+Two TcpChannel instances (ch1 and ch2) are created, bound to ports 9020 and 9021, respectively.
+Both channels register the on_connection_error callback.
+ch1 connects to ch2.
+Sending Data:
+
+ch1 sends b"123456".
+ch2 sends b"abcdefgh".
+Peer Disconnect:
+
+ch2 is closed while communication is ongoing.
+ch1 attempts to send more data (b"12345678") and triggers a connection error.
+Teardown:
+
+Both channels are closed.
+Execution
+connect_send_receive():
+Tests bi-directional communication and verifies received data.
+connection_error():
+Simulates and logs a connection error when attempting to connect to a non-existent server.
+connect_disconnect():
+Demonstrates graceful handling of a peer disconnection during communication.
+Key Features Demonstrated
+Asynchronous Communication:
+Sending and receiving are handled concurrently using threads.
+Callbacks:
+Customizable behavior for data reception and error handling.
+Error Handling:
+Graceful handling and logging of connection errors.
+Data Integrity:
+Ensures that sent data matches received data, validating transmission integrity.
+Output
+The script logs all events, including data transfer sizes, connection statuses, errors, and disconnections. Assertions in connect_send_receive() validate the correctness of data transmission.
